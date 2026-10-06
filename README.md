@@ -70,6 +70,8 @@ Open [localhost:5173](http://127.0.0.1:5173) and click a screenshot. The demo us
 
 ## 🎛️ Usage
 
+Click the PR Lens icon in Chrome's toolbar to open settings. Use **Enable PR Lens** to pause or resume the viewer and choose **Auto**, **Light**, or **Dark** as its default appearance. Settings save locally and apply to open GitHub tabs. Disabling closes an open viewer and restores normal image links. Pin PR Lens from Chrome's Extensions menu to keep these controls within reach.
+
 Click an embedded image on a GitHub PR to open the viewer. Select a thumbnail or use the adjacent previous/next controls to browse.
 
 | Action                   | Control                                                 |
@@ -89,12 +91,12 @@ Zoom follows the pointer or pinch position. Switching images resets the preview 
 
 ## 🔒 Privacy and permissions
 
-PR Lens works with images already rendered on the GitHub page. It does not require a GitHub token, upload screenshots, collect analytics, or persist image content or PR metadata. Only the appearance preference is stored.
+PR Lens works with images already rendered on the GitHub page. It does not require a GitHub token, upload screenshots, collect analytics, or persist image content or PR metadata. Only the enabled state and appearance preference are stored.
 
 | Access                                   | Purpose                                                                                                              |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | Content script on `https://github.com/*` | Detect navigation into PRs and open the viewer for eligible embedded images. Image discovery runs only on PR routes. |
-| `storage`                                | Save the Auto, Light, or Dark appearance preference locally.                                                         |
+| `storage`                                | Save the enabled state and Auto, Light, or Dark appearance preference locally.                                       |
 
 The extension preserves the page's image URLs, including parameters needed for private attachments. It has no background service worker or remote executable code.
 

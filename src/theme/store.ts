@@ -8,6 +8,7 @@ export function isThemePreference(value: unknown): value is ThemePreference {
 interface ThemeStorage {
   load: () => Promise<unknown>;
   save: (value: ThemePreference) => Promise<void>;
+  subscribe?: (listener: (value: unknown) => void) => () => void;
 }
 
 export function createThemeStore(doc: Document, storage: ThemeStorage) {
@@ -46,6 +47,12 @@ export function createThemeStore(doc: Document, storage: ThemeStorage) {
     attributeFilter: ['data-color-mode', 'data-light-theme', 'data-dark-theme', 'style'],
   });
   media.addEventListener('change', publish);
+  const unsubscribeStorage = storage.subscribe?.((value) => {
+    if (disposed) return;
+    changedByUser = true;
+    snapshot = { ...snapshot, preference: isThemePreference(value) ? value : 'auto' };
+    publish();
+  });
   resolve();
   void storage
     .load()
@@ -77,6 +84,7 @@ export function createThemeStore(doc: Document, storage: ThemeStorage) {
     dispose: () => {
       disposed = true;
       observer.disconnect();
+      unsubscribeStorage?.();
       media.removeEventListener('change', publish);
       listeners.clear();
     },

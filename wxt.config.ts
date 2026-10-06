@@ -8,6 +8,9 @@ export default defineConfig({
       'View GitHub pull request images in a carousel with zoom, pan, and light/dark themes.',
     permissions: ['storage'],
     minimum_chrome_version: '120',
+    action: {
+      default_title: 'PR Lens settings',
+    },
     content_security_policy: {
       extension_pages: "script-src 'self'; object-src 'none'",
     },

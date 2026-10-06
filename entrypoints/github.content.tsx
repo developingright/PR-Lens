@@ -26,11 +26,23 @@ export default defineContentScript({
       save: async (value) => {
         await browser.storage.local.set({ theme: value });
       },
+      subscribe: (listener) => {
+        const changed: Parameters<typeof browser.storage.onChanged.addListener>[0] = (
+          changes,
+          area,
+        ) => {
+          if (area === 'local' && changes.theme) listener(changes.theme.newValue);
+        };
+        browser.storage.onChanged.addListener(changed);
+        return () => browser.storage.onChanged.removeListener(changed);
+      },
     });
     let entries: DiscoveredImage[] = [];
     let lastPath = location.pathname;
     let frame: number | null = null;
     let disposed = false;
+    let enabled = false;
+    let enabledChanged = false;
 
     const scan = () => {
       frame = null;
@@ -39,7 +51,7 @@ export default defineContentScript({
         gallery.reset();
         lastPath = location.pathname;
       }
-      entries = pullRequestKey(location.href) ? discoverImages(document) : [];
+      entries = enabled && pullRequestKey(location.href) ? discoverImages(document) : [];
       gallery.update(entries.map((entry) => entry.image));
     };
     const scheduleScan = () => {
@@ -72,7 +84,7 @@ export default defineContentScript({
     let uiPromise: Promise<Awaited<ReturnType<typeof createUi>> | null> | null = null;
 
     const onClick = (event: MouseEvent) => {
-      if (!pullRequestKey(location.href)) return;
+      if (!enabled || !pullRequestKey(location.href)) return;
       const element = clickedImage(event);
       if (!element) return;
       scan();
@@ -120,10 +132,33 @@ export default defineContentScript({
       { capture: true },
     );
     ctx.addEventListener(window, 'resize', scheduleScan);
-    scan();
+    const onSettingsChanged: Parameters<typeof browser.storage.onChanged.addListener>[0] = (
+      changes,
+      area,
+    ) => {
+      if (disposed || area !== 'local' || !changes.enabled) return;
+      enabledChanged = true;
+      enabled = changes.enabled.newValue !== false;
+      if (!enabled) gallery.reset();
+      scheduleScan();
+    };
+    browser.storage.onChanged.addListener(onSettingsChanged);
+    void browser.storage.local.get('enabled').then(
+      (settings) => {
+        if (disposed || enabledChanged) return;
+        enabled = settings.enabled !== false;
+        scheduleScan();
+      },
+      () => {
+        if (disposed || enabledChanged) return;
+        enabled = true;
+        scheduleScan();
+      },
+    );
     ctx.onInvalidated(() => {
       disposed = true;
       observer.disconnect();
+      browser.storage.onChanged.removeListener(onSettingsChanged);
       theme.dispose();
       if (frame !== null) cancelAnimationFrame(frame);
       gallery.reset();

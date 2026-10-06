@@ -54,6 +54,8 @@ The gallery is an external store observed through `useSyncExternalStore`. Image 
 
 The content script matches `https://github.com/*` to support navigation into a PR without a reload. Image discovery and interception are gated by the PR route and cover rendered `.markdown-body` content. The gallery adds images as GitHub loads comments; it does not fetch unloaded discussion pages.
 
+The toolbar popup in `entrypoints/popup/` stores `enabled` (default true) and `theme` (default Auto) in `browser.storage.local`. Content scripts subscribe to storage changes: disabling clears the gallery and bypasses image discovery and click interception; enabling resumes discovery. Theme changes update open viewers without a reload. Unsubscribe storage listeners on disposal. The popup writes only the changed key, disables controls while loading or saving, and reports storage failures. Viewer appearance controls use the same saved theme preference.
+
 Only ordinary eligible image clicks are intercepted. Modifier and middle clicks keep native behavior. Exclude editors, avatars, emoji, and known badges. Preserve signed image URLs and repeated image occurrences; stable per-element IDs keep selection intact during rescans.
 
 Relevant mutations are batched into an animation frame. Ignore extension mutations and clean up listeners, observers, scheduled frames, and roots on invalidation. Reset gallery state when the route changes. Keep GitHub selectors in the adapter because GitHub markup can change.
@@ -77,11 +79,11 @@ Auto theme follows GitHub with an OS fallback; Light/Dark overrides persist. Tok
 
 ## Permissions and verification
 
-The extension requests `storage` for theme preferences and GitHub content-script access. It has no background worker, authentication, analytics, remote executable code, or screenshot persistence. See [AGENTS.md](AGENTS.md) for URL validation, security, and lifecycle requirements.
+The extension requests `storage` for enabled state and theme preferences and GitHub content-script access. It has no background worker, authentication, analytics, remote executable code, or screenshot persistence. See [AGENTS.md](AGENTS.md) for URL validation, security, and lifecycle requirements.
 
 Before committing, run `npm run check` and `npm run format:check`; run browser tests for viewer or content-script changes. Inspect both themes, narrow layouts, focus restoration, loading/error states, and extreme image aspect ratios. Demo fixtures include one/no images, long metadata, and 1,000 images.
 
-Current automation covers permalink extraction, gesture geometry, and standalone viewer interactions. Touch is emulated; physical trackpad/touchscreen feel needs a hardware check. Production content-script behavior, live public/private GitHub DOM, expiring private URLs, and newly loaded review threads still need integration checks. Report these separately from fixture results.
+Current automation covers permalink extraction, gesture geometry, and standalone viewer interactions. The settings browser test loads the built extension into a temporary Chromium profile and uses a synthetic GitHub page to verify saved preferences, live theme synchronization, and disabling/re-enabling interception. Run `npm run build` before this test so it exercises current code. Touch is emulated; physical trackpad/touchscreen feel needs a hardware check. Live public/private GitHub DOM, expiring private URLs, and newly loaded review threads still need integration checks. Report these separately from fixture results.
 
 Plans, builds, dependencies, and test artifacts are ignored. Keep local plans out of commits.
 
