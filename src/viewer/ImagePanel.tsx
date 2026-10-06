@@ -1,34 +1,25 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
-import { Expand, ExternalLink, ImageOff, Minus, Plus, RotateCcw } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Expand, ImageOff, Minus, Plus, RotateCcw } from 'lucide-react';
 import type { GalleryImage } from '../gallery/model';
 import { IconButton } from './IconButton';
-
-export function clampPan(value: number, imageSize: number, viewportSize: number): number {
-  const limit = Math.max(0, (imageSize - viewportSize) / 2);
-  return Math.max(-limit, Math.min(limit, value));
-}
+import { useImageGestures } from './useImageGestures';
 
 interface ImagePanelProps {
   image: GalleryImage;
   onRetry: () => void;
+  controlsContainer: HTMLElement | null;
 }
 
-export function ImagePanel({ image, onRetry }: ImagePanelProps) {
+export function ImagePanel({ image, onRetry, controlsContainer }: ImagePanelProps) {
   const viewport = useRef<HTMLDivElement>(null);
-  const pointer = useRef<{
-    id: number;
-    x: number;
-    y: number;
-    startX: number;
-    startY: number;
-  } | null>(null);
+  const gestureHelp = useId();
   const [bounds, setBounds] = useState({ width: 0, height: 0 });
   const [natural, setNatural] = useState({ width: 0, height: 0 });
-  const [requestedScale, setRequestedScale] = useState<number | null>(null);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [status, setStatus] = useState<'loading' | 'loaded' | 'failed'>('loading');
   const [retry, setRetry] = useState(0);
-  const [dragging, setDragging] = useState(false);
+  const gestures = useImageGestures(viewport, natural, bounds, status === 'loaded');
+  const { scale, x, y, fit, canPan, dragging, changeZoom, reset } = gestures;
 
   useEffect(() => {
     const element = viewport.current;
@@ -40,61 +31,6 @@ export function ImagePanel({ image, onRetry }: ImagePanelProps) {
     return () => observer.disconnect();
   }, []);
 
-  const fit =
-    natural.width && bounds.width
-      ? Math.min(1, (bounds.width - 48) / natural.width, (bounds.height - 48) / natural.height)
-      : 1;
-  const scale = requestedScale ?? Math.max(0.01, fit);
-  const canPan = scale > fit && status === 'loaded';
-  const x = clampPan(offset.x, natural.width * scale, bounds.width - 24);
-  const y = clampPan(offset.y, natural.height * scale, bounds.height - 24);
-  const changeZoom = (direction: -1 | 1) => {
-    setRequestedScale(
-      Math.max(Math.max(0.01, fit), Math.min(4, scale * (direction === 1 ? 1.4 : 1 / 1.4))),
-    );
-    setOffset({ x: 0, y: 0 });
-  };
-  const reset = () => {
-    setRequestedScale(null);
-    setOffset({ x: 0, y: 0 });
-  };
-
-  const startPan = (event: PointerEvent<HTMLDivElement>) => {
-    if (!canPan || event.button !== 0 || pointer.current) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    pointer.current = {
-      id: event.pointerId,
-      x: event.clientX,
-      y: event.clientY,
-      startX: x,
-      startY: y,
-    };
-    setDragging(true);
-  };
-  const movePan = (event: PointerEvent<HTMLDivElement>) => {
-    const active = pointer.current;
-    if (!active || event.pointerId !== active.id) return;
-    setOffset({
-      x: clampPan(
-        active.startX + event.clientX - active.x,
-        natural.width * scale,
-        bounds.width - 24,
-      ),
-      y: clampPan(
-        active.startY + event.clientY - active.y,
-        natural.height * scale,
-        bounds.height - 24,
-      ),
-    });
-  };
-  const endPan = (event: PointerEvent<HTMLDivElement>) => {
-    if (pointer.current?.id !== event.pointerId) return;
-    pointer.current = null;
-    setDragging(false);
-    if (event.currentTarget.hasPointerCapture(event.pointerId))
-      event.currentTarget.releasePointerCapture(event.pointerId);
-  };
-
   return (
     <div className="lens-image-panel">
       <div
@@ -102,11 +38,10 @@ export function ImagePanel({ image, onRetry }: ImagePanelProps) {
         className="lens-stage"
         data-pannable={canPan}
         data-dragging={dragging}
-        onPointerDown={startPan}
-        onPointerMove={movePan}
-        onPointerUp={endPan}
-        onPointerCancel={endPan}
-        onLostPointerCapture={endPan}
+        role="region"
+        aria-label="Screenshot preview"
+        aria-describedby={gestureHelp}
+        {...gestures.handlers}
       >
         {status === 'loading' && (
           <div className="lens-image-state" role="status">
@@ -155,39 +90,40 @@ export function ImagePanel({ image, onRetry }: ImagePanelProps) {
           onError={() => setStatus('failed')}
         />
       </div>
-      <div className="lens-zoom-bar" role="group" aria-label="Image controls">
-        <IconButton
-          label="Zoom out"
-          disabled={status !== 'loaded' || scale <= fit + 0.001}
-          onClick={() => changeZoom(-1)}
-        >
-          <Minus size={17} />
-        </IconButton>
-        <span className="lens-zoom-value" aria-live="polite">
-          {status === 'loaded' ? `${Math.round(scale * 100)}%` : '—'}
-        </span>
-        <IconButton
-          label="Zoom in"
-          disabled={status !== 'loaded' || scale >= 4}
-          onClick={() => changeZoom(1)}
-        >
-          <Plus size={17} />
-        </IconButton>
-        <span className="lens-control-divider" />
-        <IconButton label="Fit image to view" disabled={status !== 'loaded'} onClick={reset}>
-          <Expand size={16} />
-        </IconButton>
-        <a
-          className="lens-icon-button"
-          aria-label="Open image in new tab"
-          title="Open image in new tab"
-          href={image.originalUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <ExternalLink size={16} />
-        </a>
-      </div>
+      <p id={gestureHelp} className="lens-sr-only">
+        Pinch or Control/Command plus scroll to zoom. Drag or scroll to pan a zoomed image.
+        Double-click to zoom or fit.
+      </p>
+      {controlsContainer &&
+        createPortal(
+          <div className="lens-zoom-bar" role="group" aria-label="Image controls">
+            <IconButton
+              label="Zoom out"
+              disabled={status !== 'loaded' || scale <= fit + 0.001}
+              onClick={() => changeZoom(-1)}
+            >
+              <Minus size={14} strokeWidth={1.6} />
+            </IconButton>
+            <span
+              className="lens-zoom-value"
+              title="Pinch or Ctrl/⌘ + scroll to zoom · Drag or scroll to pan · Double-click to zoom or fit"
+            >
+              {status === 'loaded' ? `${Math.round(scale * 100)}%` : '—'}
+            </span>
+            <IconButton
+              label="Zoom in"
+              disabled={status !== 'loaded' || scale >= 4}
+              onClick={() => changeZoom(1)}
+            >
+              <Plus size={14} strokeWidth={1.6} />
+            </IconButton>
+            <span className="lens-control-divider" aria-hidden="true" />
+            <IconButton label="Fit image to view" disabled={status !== 'loaded'} onClick={reset}>
+              <Expand size={14} strokeWidth={1.6} />
+            </IconButton>
+          </div>,
+          controlsContainer,
+        )}
     </div>
   );
 }

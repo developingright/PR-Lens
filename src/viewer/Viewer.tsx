@@ -1,10 +1,10 @@
-import { useEffect, useRef, useSyncExternalStore, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
 import {
-  ArrowDownLeft,
+  CornerUpLeft,
   ChevronLeft,
   ChevronRight,
-  Images,
+  ExternalLink,
   Monitor,
   Moon,
   Sun,
@@ -27,6 +27,7 @@ export function Viewer({ gallery, theme, portalContainer, onRetry }: ViewerProps
   const appearance = useSyncExternalStore(theme.subscribe, theme.getSnapshot);
   const strip = useRef<HTMLDivElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
+  const [controlsContainer, setControlsContainer] = useState<HTMLDivElement | null>(null);
   const index = snapshot.items.findIndex((item) => item.id === snapshot.activeId);
   const image = snapshot.items[index];
 
@@ -103,17 +104,17 @@ export function Viewer({ gallery, theme, portalContainer, onRetry }: ViewerProps
               finalFocus={() => (snapshot.returnFocus?.isConnected ? snapshot.returnFocus : false)}
             >
               <header className="lens-header">
-                <div className="lens-brand">
-                  <span className="lens-brand-icon">
-                    <Images size={17} strokeWidth={1.6} />
-                  </span>
-                  <span>
-                    PR <b>Lens</b>
-                  </span>
-                </div>
+                <span className="lens-count" aria-live="polite" aria-atomic="true">
+                  <b>{index + 1}</b>
+                  <span>/</span>
+                  {snapshot.items.length}
+                </span>
+                <span className="lens-header-divider" />
                 <div className="lens-title-block">
-                  <Dialog.Title className="lens-title">{image?.title ?? 'PR images'}</Dialog.Title>
-                  <Dialog.Description className="lens-context">
+                  <Dialog.Title className="lens-title" title={image?.title}>
+                    {image?.title ?? 'PR images'}
+                  </Dialog.Title>
+                  <Dialog.Description className="lens-sr-only">
                     {image?.context ?? 'Screenshots from this pull request'}
                   </Dialog.Description>
                 </div>
@@ -137,51 +138,75 @@ export function Viewer({ gallery, theme, portalContainer, onRetry }: ViewerProps
                         aria-pressed={appearance.preference === value}
                         onClick={() => theme.setPreference(value)}
                       >
-                        <Icon size={15} strokeWidth={1.7} />
+                        <Icon size={14} strokeWidth={1.6} />
                       </IconButton>
                     ))}
                   </div>
-                  <span className="lens-header-divider" />
                   <IconButton ref={closeButton} label="Close viewer" onClick={gallery.close}>
-                    <X size={19} strokeWidth={1.6} />
+                    <X size={17} strokeWidth={1.6} />
                   </IconButton>
                 </div>
               </header>
               <div className="lens-stage-shell">
                 {image && (
-                  <ImagePanel key={`${image.id}:${image.src}`} image={image} onRetry={onRetry} />
+                  <ImagePanel
+                    key={`${image.id}:${image.src}`}
+                    image={image}
+                    onRetry={onRetry}
+                    controlsContainer={controlsContainer}
+                  />
                 )}
-                <IconButton
-                  label="Previous image"
-                  className="lens-nav lens-nav-previous"
-                  disabled={index <= 0}
-                  onClick={() => navigate(index - 1)}
-                >
-                  <ChevronLeft size={23} strokeWidth={1.5} />
-                </IconButton>
-                <IconButton
-                  label="Next image"
-                  className="lens-nav lens-nav-next"
-                  disabled={index >= snapshot.items.length - 1}
-                  onClick={() => navigate(index + 1)}
-                >
-                  <ChevronRight size={23} strokeWidth={1.5} />
-                </IconButton>
+                <div className="lens-preview-tools">
+                  <div
+                    className="lens-preview-navigation"
+                    role="group"
+                    aria-label="Image navigation"
+                  >
+                    <IconButton
+                      label="Previous image"
+                      className="lens-nav"
+                      disabled={index <= 0}
+                      onClick={() => navigate(index - 1)}
+                    >
+                      <ChevronLeft size={20} strokeWidth={1.5} />
+                    </IconButton>
+                    <IconButton
+                      label="Next image"
+                      className="lens-nav"
+                      disabled={index >= snapshot.items.length - 1}
+                      onClick={() => navigate(index + 1)}
+                    >
+                      <ChevronRight size={20} strokeWidth={1.5} />
+                    </IconButton>
+                  </div>
+                  <span className="lens-control-divider" aria-hidden="true" />
+                  <div ref={setControlsContainer} className="lens-image-controls-slot" />
+                </div>
               </div>
               <footer className="lens-footer">
-                <div className="lens-filmstrip-heading">
-                  <span className="lens-count" aria-live="polite" aria-atomic="true">
-                    <b>{index + 1}</b>
-                    <span>/</span>
-                    {snapshot.items.length}{' '}
-                    <span className="lens-count-label">
-                      {snapshot.items.length === 1 ? 'image' : 'images'} in this PR
-                    </span>
-                  </span>
-                  {image?.sourceUrl && (
-                    <a className="lens-source-link" href={image.sourceUrl} onClick={gallery.close}>
-                      View comment <ArrowDownLeft size={13} />
+                <div className="lens-footer-context">
+                  {image?.sourceUrl ? (
+                    <a
+                      className="lens-source-link"
+                      href={image.sourceUrl}
+                      title={
+                        image.context === 'PR description' ? 'Go to description' : 'Go to comment'
+                      }
+                      aria-label={
+                        image.context === 'PR description' ? 'Go to description' : 'Go to comment'
+                      }
+                      onClick={(event) => {
+                        if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey)
+                          gallery.close();
+                      }}
+                    >
+                      <CornerUpLeft size={14} strokeWidth={1.6} />
+                      <span className="lens-context">{image.context}</span>
                     </a>
+                  ) : (
+                    <span className="lens-context" title={image?.context}>
+                      {image?.context}
+                    </span>
                   )}
                 </div>
                 <div
@@ -197,7 +222,7 @@ export function Viewer({ gallery, theme, portalContainer, onRetry }: ViewerProps
                       className="lens-thumbnail"
                       aria-pressed={item.id === snapshot.activeId}
                       aria-label={`View image ${itemIndex + 1}: ${item.title}`}
-                      title={`${item.title} · ${item.context}`}
+                      title={`${itemIndex + 1} of ${snapshot.items.length} — ${item.title} · ${item.context}`}
                       onClick={() => gallery.select(item.id)}
                     >
                       <img
@@ -209,17 +234,22 @@ export function Viewer({ gallery, theme, portalContainer, onRetry }: ViewerProps
                           event.currentTarget.style.visibility = 'hidden';
                         }}
                       />
-                      <span className="lens-thumbnail-number">{itemIndex + 1}</span>
                     </button>
                   ))}
                 </div>
-                <div className="lens-footer-hint">
-                  <span>Made for a closer look.</span>
-                  <span>
-                    <kbd>←</kbd>
-                    <kbd>→</kbd> to browse <span className="lens-hint-dot">·</span> <kbd>esc</kbd>{' '}
-                    to close
-                  </span>
+                <div className="lens-footer-actions">
+                  {image && (
+                    <a
+                      className="lens-icon-button"
+                      aria-label="Open image in new tab"
+                      title="Open image in new tab"
+                      href={image.originalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink size={14} strokeWidth={1.6} />
+                    </a>
+                  )}
                 </div>
               </footer>
             </Dialog.Popup>

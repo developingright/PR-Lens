@@ -13,6 +13,7 @@ import { GalleryStore } from '../src/gallery/model';
 import { createThemeStore } from '../src/theme/store';
 import { Viewer } from '../src/viewer/Viewer';
 import viewerCss from '../src/viewer/viewer.css?inline';
+import logo from '../assets/branding/pr-lens-logo.png';
 import { fixtureImages, type Dataset } from './fixtures';
 import './page.css';
 
@@ -44,7 +45,8 @@ function Demo() {
     <>
       <div className="preview-banner">
         <a href="/" className="preview-brand">
-          <Images size={18} /> PR Lens <span>interactive preview</span>
+          <img className="preview-logo" src={logo} alt="" /> PR Lens{' '}
+          <span>interactive preview</span>
         </a>
         <span className="preview-note">A closer look. Fewer tabs.</span>
         <button
@@ -126,7 +128,7 @@ function Demo() {
                 </p>
                 <p>Here’s where we landed. Click a screenshot to take a closer look.</p>
                 <div className="demo-screenshots">
-                  {items.slice(0, 2).map((item) => (
+                  {items.slice(0, 1).map((item) => (
                     <button
                       key={item.id}
                       className="screenshot-card"
@@ -156,6 +158,29 @@ function Demo() {
                 </span>
               </div>
             </article>
+            {items[1] && (
+              <article className="comment" id="maya-comment">
+                <span className="avatar author-avatar">M</span>
+                <div className="comment-header">
+                  <b>maya</b>
+                  <span>commented 90 minutes ago</span>
+                  <span className="author-tag">Author</span>
+                </div>
+                <div className="comment-body">
+                  <p>Here is the same workspace in dark mode.</p>
+                  <button
+                    className="screenshot-card review-screenshot"
+                    onClick={(event) => open(items[1]!.id, event.currentTarget)}
+                  >
+                    <img src={items[1].src} alt={items[1].title} />
+                    <span>
+                      {items[1].title}
+                      <ArrowUpRight size={13} />
+                    </span>
+                  </button>
+                </div>
+              </article>
+            )}
             <div className="timeline-event">
               <span className="event-icon">
                 <Check size={14} />
@@ -177,18 +202,19 @@ function Demo() {
                   The preferences panel feels much clearer now. Adding the final state here for
                   reference.
                 </p>
-                {items[2] && (
+                {items.slice(2, 4).map((item) => (
                   <button
+                    key={item.id}
                     className="screenshot-card review-screenshot"
-                    onClick={(event) => open(items[2]!.id, event.currentTarget)}
+                    onClick={(event) => open(item.id, event.currentTarget)}
                   >
-                    <img src={items[2].src} alt={items[2].title} />
+                    <img src={item.src} alt={item.title} />
                     <span>
-                      {items[2].title}
+                      {item.title}
                       <ArrowUpRight size={13} />
                     </span>
                   </button>
-                )}
+                ))}
               </div>
             </article>
           </section>

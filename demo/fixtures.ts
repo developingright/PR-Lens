@@ -6,19 +6,26 @@ const make = (
   file: string,
   title: string,
   context = 'PR description',
+  sourceUrl = '#description',
 ): GalleryImage => ({
   id,
   src: `/images/${file}`,
   originalUrl: `/images/${file}`,
   title,
   context,
-  sourceUrl: '#review',
+  sourceUrl,
 });
 export const demoImages: GalleryImage[] = [
   make('overview', 'overview.svg', 'Workspace overview · light mode'),
-  make('dark', 'dark.svg', 'Workspace overview · dark mode', 'Comment by maya'),
-  make('settings', 'settings.svg', 'Notification preferences', 'Comment by alex'),
-  make('detail', 'detail.svg', 'Project activity and release details', 'Review comment'),
+  make('dark', 'dark.svg', 'Workspace overview · dark mode', 'Comment by maya', '#maya-comment'),
+  make('settings', 'settings.svg', 'Notification preferences', 'Comment by alex', '#review'),
+  make(
+    'detail',
+    'detail.svg',
+    'Project activity and release details',
+    'Comment by alex',
+    '#review',
+  ),
 ];
 export function fixtureImages(dataset: Dataset): GalleryImage[] {
   if (dataset === 'empty') return [];

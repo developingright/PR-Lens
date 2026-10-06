@@ -35,8 +35,8 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   padding: 13px 32px;
-  background: #1b2a20;
-  color: #e2eddf;
+  background: #1b1b1e;
+  color: #e6e6eb;
 }
 .preview-brand {
   display: flex;
@@ -50,21 +50,26 @@ button:disabled {
 .preview-brand span {
   font-size: 11px;
   margin-left: 12px;
-  color: #96ae98;
+  color: #9797a1;
   font-weight: 400;
 }
 .preview-note {
   font-size: 11px;
-  color: #a8bea9;
+  color: #9797a1;
+}
+.preview-logo {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
 }
 .preview-banner button {
   display: flex;
   gap: 9px;
   align-items: center;
-  border: 1px solid #45624b;
-  background: #2c4231;
+  border: 1px solid #3c3c44;
+  background: #29292e;
   border-radius: 7px;
-  color: #e2eddf;
+  color: #e6e6eb;
   padding: 6px 11px;
   font-size: 11px;
 }

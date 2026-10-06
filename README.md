@@ -1,6 +1,6 @@
 # PR Lens
 
-A Chrome extension that opens images in GitHub pull requests in a calm, in-page viewer. Browse the loaded screenshots through a filmstrip, inspect details with zoom and pan, and switch between light and dark themes.
+A Chrome extension for viewing GitHub pull request images without opening extra tabs. Browse screenshots through a filmstrip, zoom and pan, and switch between light and dark themes.
 
 ## Try it locally
 
@@ -24,6 +24,8 @@ npm run build
 3. Refresh an open GitHub PR, then click an embedded screenshot.
 
 Left/right arrows browse, Home/End jump to the first/last image, and Escape closes. The viewer offers fit, zoom, pan, and Auto / Light / Dark appearance. Modified and middle clicks keep their normal browser behavior. **Open image in new tab** is an optional action.
+
+Previous/next buttons sit together beneath the preview. Pinch or hold Ctrl/⌘ while scrolling to zoom around the pointer; drag or use two-finger scrolling to pan a zoomed image. Touchscreen pinch and one-finger pan are supported. Double-click to zoom or return to fit.
 
 The gallery includes images rendered in the current PR page and adds images when GitHub loads more comments. It does not fetch unloaded discussion pages or require a GitHub token. Private attachments use the page's existing image sources; authenticated repository behavior requires a manual browser check.
 

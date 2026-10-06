@@ -71,13 +71,23 @@ export function discoverImages(doc: Document, root: ParentNode = doc): Discovere
     const author = comment
       ?.querySelector('.author, [data-hovercard-type="user"]')
       ?.textContent?.trim();
-    const sourceAnchor = comment?.querySelector<HTMLAnchorElement>(
-      'a[href*="#issuecomment-"], a[href*="#discussion_r"], a[href*="#pullrequestreview-"]',
+    const sourceId = element.closest(
+      '[id^="issuecomment-"], [id^="discussion_r"], [id^="pullrequestreview-"], [id^="issue-"]',
+    )?.id;
+    // A quoted link inside the comment body is not the comment's own permalink.
+    const sourceAnchor = [...(comment?.querySelectorAll<HTMLAnchorElement>('a[href]') ?? [])].find(
+      (anchor) => {
+        if (anchor.closest(BODY_SELECTOR)) return false;
+        const href = httpsUrl(anchor.getAttribute('href'), doc.location.href);
+        if (!href) return false;
+        const url = new URL(href);
+        return (
+          pullRequestKey(url.href) === pullRequestKey(doc.location.href) &&
+          /^#(?:issuecomment-|discussion_r|pullrequestreview-|issue-)/.test(url.hash) &&
+          (!sourceId || url.hash === `#${sourceId}`)
+        );
+      },
     );
-    const sourceId =
-      comment?.id ||
-      element.closest('[id^="issuecomment-"], [id^="discussion_r"], [id^="pullrequestreview-"]')
-        ?.id;
     const fallbackSource = sourceId
       ? `${doc.location.origin}${doc.location.pathname}#${sourceId}`
       : null;
@@ -95,7 +105,13 @@ export function discoverImages(doc: Document, root: ParentNode = doc): Discovere
           src,
           originalUrl: originalImageUrl(element, src, doc.location.href),
           title,
-          context: author ? `Comment by ${author}` : comment ? 'Review comment' : 'PR description',
+          context: sourceId?.startsWith('issue-')
+            ? 'PR description'
+            : author
+              ? `Comment by ${author}`
+              : comment
+                ? 'Review comment'
+                : 'PR description',
           sourceUrl,
         },
       },

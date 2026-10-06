@@ -5,7 +5,14 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   timeout: 30_000,
-  use: { viewport: { width: 1440, height: 1000 }, trace: 'retain-on-failure' },
+  use: {
+    baseURL: 'http://127.0.0.1:5173',
+    viewport: { width: 1440, height: 1000 },
+    trace: 'retain-on-failure',
+    launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+      ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }
+      : {},
+  },
   webServer: {
     command: 'npm run demo',
     url: 'http://127.0.0.1:5173',
