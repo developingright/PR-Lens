@@ -32,19 +32,21 @@ Without that variable, Playwright looks for its expected cached browser. Tests u
 
 ## Architecture
 
-| Path                             | Responsibility                                                         |
-| -------------------------------- | ---------------------------------------------------------------------- |
-| `entrypoints/github.content.tsx` | Click interception, lazy UI mounting, DOM observation, and cleanup.    |
-| `src/github/discovery.ts`        | PR routes, image filtering, metadata, and source permalinks.           |
-| `src/gallery/model.ts`           | Gallery state and safe HTTPS URL resolution.                           |
-| `src/theme/store.ts`             | Auto/Light/Dark appearance and preference persistence.                 |
-| `src/viewer/`                    | Dialog, thumbnails, image loading, and controls.                       |
-| `src/viewer/useImageGestures.ts` | Wheel, drag, pinch, and double-click input.                            |
-| `src/viewer/geometry.ts`         | Fit, bounded transforms, and pointer-anchored zoom.                    |
-| `demo/`                          | Synthetic PR context and stress fixtures; excluded from the extension. |
-| `tests/`                         | DOM/geometry unit tests and viewer browser tests.                      |
-| `assets/branding/`               | Generated logo master.                                                 |
-| `public/`                        | Chrome icon sizes.                                                     |
+| Path                                | Responsibility                                                         |
+| ----------------------------------- | ---------------------------------------------------------------------- |
+| `entrypoints/github.content.tsx`    | Click interception, lazy UI mounting, DOM observation, and cleanup.    |
+| `src/github/discovery.ts`           | PR routes, image filtering, metadata, and source permalinks.           |
+| `src/github/collapse.ts`            | Reversible inline image collapse, text links, and reading position.    |
+| `src/gallery/model.ts`              | Gallery state and safe HTTPS URL resolution.                           |
+| `src/theme/store.ts`                | Auto/Light/Dark appearance and preference persistence.                 |
+| `src/viewer/`                       | Dialog, thumbnails, image loading, and controls.                       |
+| `src/viewer/useSourceNavigation.ts` | Close completion, deferred source navigation, and fragment cleanup.    |
+| `src/viewer/useImageGestures.ts`    | Wheel, drag, pinch, and double-click input.                            |
+| `src/viewer/geometry.ts`            | Fit, bounded transforms, and pointer-anchored zoom.                    |
+| `demo/`                             | Synthetic PR context and stress fixtures; excluded from the extension. |
+| `tests/`                            | DOM/geometry unit tests and viewer browser tests.                      |
+| `assets/branding/`                  | Generated logo master.                                                 |
+| `public/`                           | Chrome icon sizes.                                                     |
 
 The gallery is an external store observed through `useSyncExternalStore`. Image panels own loading and gesture state and reset when the selected image changes. Theme persistence is injected: the demo uses local storage; the extension uses `browser.storage.local`.
 
@@ -54,13 +56,19 @@ The gallery is an external store observed through `useSyncExternalStore`. Image 
 
 The content script matches `https://github.com/*` to support navigation into a PR without a reload. Image discovery and interception are gated by the PR route and cover rendered `.markdown-body` content. The gallery adds images as GitHub loads comments; it does not fetch unloaded discussion pages.
 
-The toolbar popup in `entrypoints/popup/` stores `enabled` (default true) and `theme` (default Auto) in `browser.storage.local`. Content scripts subscribe to storage changes: disabling clears the gallery and bypasses image discovery and click interception; enabling resumes discovery. Theme changes update open viewers without a reload. Unsubscribe storage listeners on disposal. The popup writes only the changed key, disables controls while loading or saving, and reports storage failures. Viewer appearance controls use the same saved theme preference.
+The toolbar popup in `entrypoints/popup/` stores `enabled` (default true), `theme` (default Auto), and `collapseImages` (default false) in `browser.storage.local`. Content scripts subscribe to storage changes: disabling clears the gallery and bypasses image discovery and click interception; enabling resumes discovery. Theme changes update open viewers without a reload. Unsubscribe storage listeners on disposal. The popup writes only the changed key, disables controls while loading or saving, and reports storage failures. Viewer appearance controls use the same saved theme preference.
+
+“Collapse PR images” replaces eligible rendered images with compact “View in PR Lens” text links. Originals stay connected and keep their attributes, source URLs, and gallery IDs; a scoped extension attribute hides the image, picture, or image-only anchor. Links sit outside original anchors to avoid nested links and preserve unrelated linked text. Ordinary clicks and Enter open the corresponding gallery item; modified/middle clicks use the validated original image URL. Long labels truncate with the full label available through the link's title and viewer. Badges, avatars, editor previews, and unsafe image URLs retain the same discovery exclusions.
+
+Collapsing applies live, including to newly rendered comments. Turning it off, disabling PR Lens, leaving a PR, or invalidating the content script restores the original nodes and removes extension links/styles. The adapter preserves visible reading content during layout changes and restores focus when removing a focused placeholder. It ignores its own link/style mutations. No screenshot or PR metadata is persisted, and no new permissions are required.
 
 Only ordinary eligible image clicks are intercepted. Modifier and middle clicks keep native behavior. Exclude editors, avatars, emoji, and known badges. Preserve signed image URLs and repeated image occurrences; stable per-element IDs keep selection intact during rescans.
 
 Relevant mutations are batched into an animation frame. Ignore extension mutations and clean up listeners, observers, scheduled frames, and roots on invalidation. Reset gallery state when the route changes. Keep GitHub selectors in the adapter because GitHub markup can change.
 
-Source links use the enclosing comment/description ID or a matching header permalink from the same PR. Links quoted in markdown are not source permalinks. The footer location label closes the gallery and follows that link in the same tab, then clears the fragment after the browser scrolls to the source so GitHub does not leave its `:target` highlight active; show plain text when no usable destination exists. The separate original-image link explicitly opens a new tab.
+Non-PR routes (including `/pulls`) bypass discovery and collapse updates entirely. Navigating to another pathname or disabling the extension also removes the viewer's React root and Shadow DOM. Pending UI creation is tied to its originating route/generation so a late stylesheet load cannot mount a viewer on the next page. Dialog focus restoration reads the current gallery state to avoid focusing stale PR elements during teardown.
+
+Source links use the enclosing comment/description ID or a matching header permalink from the same PR. Links quoted in markdown are not source permalinks. Ordinary footer location clicks prevent immediate navigation, close the gallery, and wait for Base UI's `onOpenChangeComplete(false)` plus two bounded animation frames before following the source link. This lets portal, focus/inert, and scroll-lock cleanup finish before GitHub handles navigation. Source navigation suppresses return focus to the original image; ordinary close/Escape still restores it. Cancel pending frames/timers on unmount and abandon source navigation if another route or viewer opening supersedes it. Modified/middle clicks keep native link behavior. After a same-document jump, clear the fragment so GitHub does not leave its `:target` highlight active; show plain text when no usable destination exists. Fragment-only URL changes do not reset the gallery or interrupt dialog teardown. The separate original-image link explicitly opens a new tab.
 
 ## Viewer behavior
 
@@ -79,11 +87,11 @@ Auto theme follows GitHub with an OS fallback; Light/Dark overrides persist. Tok
 
 ## Permissions and verification
 
-The extension requests `storage` for enabled state and theme preferences and GitHub content-script access. It has no background worker, authentication, analytics, remote executable code, or screenshot persistence. See [AGENTS.md](AGENTS.md) for URL validation, security, and lifecycle requirements.
+The extension requests `storage` for enabled state, image collapse, and theme preferences and GitHub content-script access. It has no background worker, authentication, analytics, remote executable code, or screenshot persistence. See [AGENTS.md](AGENTS.md) for URL validation, security, and lifecycle requirements.
 
 Before committing, run `npm run check` and `npm run format:check`; run browser tests for viewer or content-script changes. Inspect both themes, narrow layouts, focus restoration, loading/error states, and extreme image aspect ratios. Demo fixtures include one/no images, long metadata, and 1,000 images.
 
-Current automation covers permalink extraction, gesture geometry, and standalone viewer interactions. The settings browser test loads the built extension into a temporary Chromium profile and uses a synthetic GitHub page to verify saved preferences, live theme synchronization, and disabling/re-enabling interception. Run `npm run build` before this test so it exercises current code. Touch is emulated; physical trackpad/touchscreen feel needs a hardware check. Live public/private GitHub DOM, expiring private URLs, and newly loaded review threads still need integration checks. Report these separately from fixture results.
+Current automation covers permalink extraction, gesture geometry, and standalone viewer interactions. The settings and collapse browser tests load the built extension into temporary Chromium profiles and use synthetic GitHub pages to verify saved preferences, live theme synchronization, disabling/re-enabling interception, collapsed gallery access, signed URLs, modifier/middle clicks, reading position, focus restoration, discovery exclusions, dynamically rendered comments, route cleanup, and 1,000 rendered images. Collapse fixtures include a dev-only Demo data / Worst case selector, long and multilingual labels, extreme aspect ratios, failed images, and unsaved editor content. Run `npm run build` before these tests so they exercise current code. Touch and 200% content zoom are emulated; physical trackpad/touchscreen feel and actual browser zoom need a hardware/manual check. Live public/private GitHub DOM, expiring private URLs, and newly loaded review threads still need integration checks. Report these separately from fixture results.
 
 Plans, builds, dependencies, and test artifacts are ignored. Keep local plans out of commits.
 

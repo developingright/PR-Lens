@@ -70,6 +70,12 @@ legend {
   font-size: 13px;
   font-weight: 600;
 }
+.enable-row > div {
+  min-width: 0;
+}
+.collapse-row {
+  padding-top: 0;
+}
 .switch {
   appearance: none;
   width: 34px;

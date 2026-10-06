@@ -14,17 +14,26 @@ import type { GalleryStore } from '../gallery/model';
 import type { ThemeStore } from '../theme/store';
 import { IconButton } from './IconButton';
 import { ImagePanel } from './ImagePanel';
+import { useSourceNavigation } from './useSourceNavigation';
 
 interface ViewerProps {
   gallery: GalleryStore;
   theme: ThemeStore;
   portalContainer: HTMLElement;
   onRetry: () => void;
+  resolveReturnFocus?: (target: HTMLElement | null) => HTMLElement | null;
 }
 
-export function Viewer({ gallery, theme, portalContainer, onRetry }: ViewerProps) {
+export function Viewer({
+  gallery,
+  theme,
+  portalContainer,
+  onRetry,
+  resolveReturnFocus,
+}: ViewerProps) {
   const snapshot = useSyncExternalStore(gallery.subscribe, gallery.getSnapshot);
   const appearance = useSyncExternalStore(theme.subscribe, theme.getSnapshot);
+  const sourceNavigation = useSourceNavigation(gallery);
   const strip = useRef<HTMLDivElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const [controlsContainer, setControlsContainer] = useState<HTMLDivElement | null>(null);
@@ -82,6 +91,7 @@ export function Viewer({ gallery, theme, portalContainer, onRetry }: ViewerProps
     <div className="lens-root" data-theme={appearance.resolved} data-input={snapshot.inputMode}>
       <Dialog.Root
         open={snapshot.open && !!image}
+        onOpenChangeComplete={sourceNavigation.onOpenChangeComplete}
         onOpenChange={(open, details) => {
           if (!open) {
             if (details.event.type.startsWith('key')) gallery.setInputMode('keyboard');
@@ -101,7 +111,13 @@ export function Viewer({ gallery, theme, portalContainer, onRetry }: ViewerProps
             <Dialog.Popup
               className="lens-dialog"
               initialFocus={closeButton}
-              finalFocus={() => (snapshot.returnFocus?.isConnected ? snapshot.returnFocus : false)}
+              finalFocus={() => {
+                if (sourceNavigation.isPending()) return false;
+                // Teardown can precede React's next render after navigation.
+                const returnFocus = gallery.getSnapshot().returnFocus;
+                const target = resolveReturnFocus ? resolveReturnFocus(returnFocus) : returnFocus;
+                return target?.isConnected ? target : false;
+              }}
             >
               <header className="lens-header">
                 <span className="lens-count" aria-live="polite" aria-atomic="true">
@@ -198,29 +214,9 @@ export function Viewer({ gallery, theme, portalContainer, onRetry }: ViewerProps
                       onClick={(event) => {
                         if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
                           return;
-
-                        gallery.close();
-
-                        // Let the browser perform the fragment jump, then remove the fragment
-                        // from the address bar. GitHub styles the matching `:target` block with
-                        // a blue highlight; the jump remains useful without leaving that state behind.
-                        const sourceUrl = image?.sourceUrl;
-                        if (!sourceUrl) return;
-                        const source = new URL(sourceUrl, window.location.href);
-                        if (
-                          source.origin === window.location.origin &&
-                          source.pathname === window.location.pathname &&
-                          source.hash
-                        ) {
-                          window.setTimeout(() => {
-                            if (window.location.hash !== source.hash) return;
-                            window.history.replaceState(
-                              window.history.state,
-                              '',
-                              `${window.location.pathname}${window.location.search}`,
-                            );
-                          }, 0);
-                        }
+                        if (!image.sourceUrl) return;
+                        event.preventDefault();
+                        sourceNavigation.start(image.sourceUrl);
                       }}
                     >
                       <CornerUpLeft size={14} strokeWidth={1.6} />

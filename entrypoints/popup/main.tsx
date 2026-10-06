@@ -7,6 +7,7 @@ import './style.css';
 
 function Settings() {
   const [enabled, setEnabled] = useState(true);
+  const [collapseImages, setCollapseImages] = useState(false);
   const [theme, setTheme] = useState<ThemePreference>('auto');
   const [ready, setReady] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -20,19 +21,21 @@ function Settings() {
       area,
     ) => {
       if (disposed || area !== 'local') return;
-      if (changes.enabled || changes.theme) changed = true;
+      if (changes.enabled || changes.theme || changes.collapseImages) changed = true;
       if (changes.enabled) setEnabled(changes.enabled.newValue !== false);
+      if (changes.collapseImages) setCollapseImages(changes.collapseImages.newValue === true);
       if (changes.theme) {
         const value: unknown = changes.theme.newValue;
         setTheme(isThemePreference(value) ? value : 'auto');
       }
     };
     browser.storage.onChanged.addListener(onChanged);
-    void browser.storage.local.get(['enabled', 'theme']).then(
+    void browser.storage.local.get(['enabled', 'theme', 'collapseImages']).then(
       (settings) => {
         if (disposed) return;
         if (!changed) {
           setEnabled(settings.enabled !== false);
+          setCollapseImages(settings.collapseImages === true);
           setTheme(isThemePreference(settings.theme) ? settings.theme : 'auto');
         }
         setReady(true);
@@ -47,14 +50,18 @@ function Settings() {
     };
   }, []);
 
-  const save = async (settings: { enabled: boolean } | { theme: ThemePreference }) => {
+  const save = async (
+    settings: { enabled: boolean } | { theme: ThemePreference } | { collapseImages: boolean },
+  ) => {
     setSaving(true);
     setError('');
     try {
       if ('enabled' in settings) await browser.storage.local.set({ enabled: settings.enabled });
-      else await browser.storage.local.set({ theme: settings.theme });
+      else if ('theme' in settings) await browser.storage.local.set({ theme: settings.theme });
+      else await browser.storage.local.set({ collapseImages: settings.collapseImages });
       if ('enabled' in settings) setEnabled(settings.enabled);
       if ('theme' in settings) setTheme(settings.theme);
+      if ('collapseImages' in settings) setCollapseImages(settings.collapseImages);
     } catch {
       setError('Could not save settings. Please try again.');
     } finally {
@@ -87,6 +94,25 @@ function Settings() {
           checked={enabled}
           disabled={!ready || saving}
           onChange={(event) => void save({ enabled: event.target.checked })}
+        />
+      </section>
+      <section className="enable-row collapse-row">
+        <div>
+          <label htmlFor="collapse-images">Collapse PR images</label>
+          <p id="collapse-images-help">
+            Replace images with text links. View them in PR Lens.
+            {!enabled && ' Takes effect when PR Lens is enabled.'}
+          </p>
+        </div>
+        <input
+          id="collapse-images"
+          className="switch"
+          type="checkbox"
+          role="switch"
+          aria-describedby="collapse-images-help"
+          checked={collapseImages}
+          disabled={!ready || saving}
+          onChange={(event) => void save({ collapseImages: event.target.checked })}
         />
       </section>
       <fieldset disabled={!ready || saving}>

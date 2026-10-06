@@ -119,16 +119,19 @@ export function discoverImages(doc: Document, root: ParentNode = doc): Discovere
   });
 }
 
+export function isOrdinaryClick(event: MouseEvent): boolean {
+  return (
+    event.button === 0 &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.shiftKey &&
+    !event.altKey &&
+    !event.defaultPrevented
+  );
+}
+
 export function clickedImage(event: MouseEvent): HTMLImageElement | null {
-  if (
-    event.button !== 0 ||
-    event.metaKey ||
-    event.ctrlKey ||
-    event.shiftKey ||
-    event.altKey ||
-    event.defaultPrevented
-  )
-    return null;
+  if (!isOrdinaryClick(event)) return null;
   const target = event.target;
   if (!(target instanceof Element)) return null;
   if (target instanceof HTMLImageElement) return target;
