@@ -100,7 +100,7 @@ test('location links close the gallery and land on the selected image discussion
     await expect(location).toHaveAttribute('href', hash);
     await location.click();
     await expect(dialog).toBeHidden();
-    await expect(page).toHaveURL(new RegExp(`${hash}$`));
+    await expect.poll(() => page.evaluate(() => window.location.hash)).toBe('');
     const comment = page.locator(hash);
     await expect(comment).toBeInViewport();
     await expect(comment.getByRole('img', { name: imageTitle!, exact: true })).toBeVisible();

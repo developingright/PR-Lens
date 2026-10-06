@@ -196,8 +196,31 @@ export function Viewer({ gallery, theme, portalContainer, onRetry }: ViewerProps
                         image.context === 'PR description' ? 'Go to description' : 'Go to comment'
                       }
                       onClick={(event) => {
-                        if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey)
-                          gallery.close();
+                        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+                          return;
+
+                        gallery.close();
+
+                        // Let the browser perform the fragment jump, then remove the fragment
+                        // from the address bar. GitHub styles the matching `:target` block with
+                        // a blue highlight; the jump remains useful without leaving that state behind.
+                        const sourceUrl = image?.sourceUrl;
+                        if (!sourceUrl) return;
+                        const source = new URL(sourceUrl, window.location.href);
+                        if (
+                          source.origin === window.location.origin &&
+                          source.pathname === window.location.pathname &&
+                          source.hash
+                        ) {
+                          window.setTimeout(() => {
+                            if (window.location.hash !== source.hash) return;
+                            window.history.replaceState(
+                              window.history.state,
+                              '',
+                              `${window.location.pathname}${window.location.search}`,
+                            );
+                          }, 0);
+                        }
                       }}
                     >
                       <CornerUpLeft size={14} strokeWidth={1.6} />

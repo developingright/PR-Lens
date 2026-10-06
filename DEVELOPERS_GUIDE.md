@@ -58,7 +58,7 @@ Only ordinary eligible image clicks are intercepted. Modifier and middle clicks 
 
 Relevant mutations are batched into an animation frame. Ignore extension mutations and clean up listeners, observers, scheduled frames, and roots on invalidation. Reset gallery state when the route changes. Keep GitHub selectors in the adapter because GitHub markup can change.
 
-Source links use the enclosing comment/description ID or a matching header permalink from the same PR. Links quoted in markdown are not source permalinks. The footer location label closes the gallery and follows that link in the same tab; show plain text when no usable destination exists. The separate original-image link explicitly opens a new tab.
+Source links use the enclosing comment/description ID or a matching header permalink from the same PR. Links quoted in markdown are not source permalinks. The footer location label closes the gallery and follows that link in the same tab, then clears the fragment after the browser scrolls to the source so GitHub does not leave its `:target` highlight active; show plain text when no usable destination exists. The separate original-image link explicitly opens a new tab.
 
 ## Viewer behavior
 
