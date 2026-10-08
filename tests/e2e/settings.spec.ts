@@ -28,7 +28,7 @@ test('toolbar settings persist and update image interception and open viewers', 
       } else {
         await route.fulfill({
           contentType: 'text/html',
-          body: '<!doctype html><html data-color-mode="light"><body><article class="timeline-comment" id="issue-1"><div class="markdown-body"><a href="#native-image"><img src="https://github.com/assets/screenshot.svg" alt="Settings test screenshot" width="400" height="250"></a></div></article><div id="native-image">Original destination</div></body></html>',
+          body: '<!doctype html><html data-color-mode="light"><body><article class="timeline-comment" id="issue-1"><div class="markdown-body"><img src="https://github.com/assets/screenshot.svg" alt="Settings test screenshot" width="400" height="250"><a href="#native-image"><img src="https://github.com/assets/action.svg" alt="Native linked image" width="100" height="40"></a></div></article><div id="native-image">Original destination</div></body></html>',
         });
       }
     });
@@ -58,6 +58,8 @@ test('toolbar settings persist and update image interception and open viewers', 
     await expect(enabled).not.toBeChecked();
     await expect(dialog).toBeHidden();
     await screenshot.click();
+    await expect(dialog).toBeHidden();
+    await github.getByRole('img', { name: 'Native linked image', exact: true }).click();
     await expect(github).toHaveURL(/#native-image$/);
     await popup.reload();
     await expect(enabled).not.toBeChecked();

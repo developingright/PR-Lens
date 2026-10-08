@@ -162,9 +162,20 @@ export default defineContentScript({
     });
     observer.observe(document.documentElement, {
       childList: true,
+      characterData: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['src', 'srcset', 'alt', 'class', 'id'],
+      attributeFilter: [
+        'src',
+        'srcset',
+        'data-src',
+        'data-canonical-src',
+        'href',
+        'alt',
+        'class',
+        'id',
+        'role',
+      ],
     });
     ctx.addEventListener(document, 'click', onClick, { capture: true });
     ctx.addEventListener(window, 'wxt:locationchange', ({ newUrl, oldUrl }) => {

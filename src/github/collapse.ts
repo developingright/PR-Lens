@@ -155,7 +155,11 @@ export function createImageCollapse(doc: Document) {
     resolveReturnFocus(target: HTMLElement | null): HTMLElement | null {
       const element = target instanceof HTMLAnchorElement ? imagesByLink.get(target) : null;
       if (!element) return target;
-      return records.get(element)?.link ?? element.closest('a') ?? doc.body;
+      return (
+        records.get(element)?.link ??
+        element.closest('a') ??
+        (element.hasAttribute('tabindex') ? element : doc.body)
+      );
     },
     dispose() {
       for (const [element, record] of records) restore(element, record);

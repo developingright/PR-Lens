@@ -44,7 +44,7 @@ async function openExtensionFixture() {
         <nav aria-label="Fixture data"><button>Demo data</button><button>Worst case</button></nav>
         <article class="timeline-comment" id="issue-1"><div class="markdown-body">
           <p>Before screenshot</p>
-          <p><a id="original" href="${signedImage}"><picture><img id="tall" src="${signedImage}" alt="Tall screenshot" width="400" height="2400" style="border: 1px solid blue"></picture></a></p>
+          <p><a id="original" href="${signedImage}" target="_blank" rel="noopener noreferrer"><picture><img id="tall" src="${signedImage}" alt="Tall screenshot" width="400" height="2400" style="border: 1px solid blue"></picture></a></p>
           <p id="reading">The implementation notes you were reading.</p>
           <div id="images"></div>
           <img class="avatar" src="https://github.com/assets/avatar.svg" alt="Avatar" width="32" height="32">
@@ -95,6 +95,228 @@ async function installFixtureControls(github: Page) {
     document.querySelector('nav button:last-child')!.addEventListener('click', () => show(true));
   }, longTitle);
 }
+
+test('linked image actions survive nesting, keyboard activation, and collapse without entering the gallery', async () => {
+  const { context, github, collapse, errors } = await openExtensionFixture();
+  try {
+    const variants = [
+      { id: 'direct', tag: 'a', depth: 0 },
+      { id: 'nested', tag: 'a', depth: 50 },
+      { id: 'picture', tag: 'a', depth: 2, picture: true },
+      { id: 'mixed', tag: 'a', depth: 1, text: true },
+      { id: 'multiple', tag: 'a', depth: 1, multiple: true },
+      { id: 'no-href', tag: 'a', depth: 3, noHref: true },
+      {
+        id: 'image-url-action',
+        tag: 'a',
+        depth: 5,
+        href: 'https://github.com/assets/fix.svg?action=fix',
+      },
+      { id: 'aria-link', tag: 'span', depth: 5, role: 'link' },
+      { id: 'button', tag: 'button', depth: 2 },
+      { id: 'aria-button', tag: 'span', depth: 2, role: 'button' },
+    ];
+    await github.evaluate((cases) => {
+      const body = document.querySelector('#images')!;
+      for (const variant of cases) {
+        const control = document.createElement(variant.tag);
+        control.id = variant.id;
+        control.tabIndex = 0;
+        control.style.display = 'inline-block';
+        control.style.padding = '12px';
+        if (variant.tag === 'a' && !variant.noHref)
+          control.setAttribute('href', variant.href ?? '#reading');
+        if (variant.role) control.setAttribute('role', variant.role);
+        if (variant.text) control.append('Fix issue');
+        let parent = control;
+        for (let i = 0; i < variant.depth; i++) {
+          const wrapper = document.createElement('span');
+          parent.append(wrapper);
+          parent = wrapper;
+        }
+        if (variant.picture) {
+          const picture = document.createElement('picture');
+          parent.append(picture);
+          parent = picture;
+        }
+        for (let i = 0; i < (variant.multiple ? 2 : 1); i++) {
+          const image = document.createElement('img');
+          image.src = 'https://github.com/assets/fix.svg';
+          image.alt = `Fix issue ${variant.id} ${i}`;
+          image.width = 80;
+          image.height = 40;
+          parent.append(image);
+        }
+        control.addEventListener('click', (event) => {
+          control.dataset.preventedByLens = String(event.defaultPrevented);
+          control.dataset.clicks = String(Number(control.dataset.clicks ?? 0) + 1);
+          event.preventDefault(); // Stand in for a bot's fix action without navigating away.
+        });
+        const paragraph = document.createElement('p');
+        paragraph.append(control);
+        body.append(paragraph);
+      }
+    }, variants);
+
+    for (const collapsed of [false, true]) {
+      if (collapsed) await collapse.click();
+      await expect(github.locator('[data-pr-lens-placeholder]')).toHaveCount(collapsed ? 1 : 0);
+      for (const variant of variants) {
+        const control = github.locator(`#${variant.id}`);
+        const image = control.locator('img').first();
+        await expect(image).toBeVisible();
+        const before = Number((await control.getAttribute('data-clicks')) ?? 0);
+        await image.click();
+        await expect(control).toHaveAttribute('data-clicks', String(before + 1));
+        await expect(control).toHaveAttribute('data-prevented-by-lens', 'false');
+        // Clicking link padding must also bypass the old image-only-anchor shortcut.
+        await control.click({ position: { x: 2, y: 2 } });
+        await expect(control).toHaveAttribute('data-clicks', String(before + 2));
+        await expect(github.getByRole('dialog')).toHaveCount(0);
+      }
+      const direct = github.locator('#direct');
+      const before = Number(await direct.getAttribute('data-clicks'));
+      await direct.focus();
+      await github.keyboard.press('Enter');
+      await expect(direct).toHaveAttribute('data-clicks', String(before + 1));
+      await expect(direct).toHaveAttribute('data-prevented-by-lens', 'false');
+      await expect(direct).toBeFocused();
+      await expect(github.getByRole('dialog')).toHaveCount(0);
+
+      const opener = collapsed
+        ? github.locator('[data-pr-lens-placeholder]')
+        : github.locator('#tall');
+      await opener.click();
+      await expect(github.getByRole('dialog')).toHaveAccessibleName('Tall screenshot');
+      await expect(github.locator('.lens-thumbnail')).toHaveCount(1);
+      await github.keyboard.press('Escape');
+      await expect(github.getByRole('dialog')).toBeHidden();
+    }
+    expect(errors).toEqual([]);
+  } finally {
+    await context.close();
+  }
+});
+
+test('GitHub image wrappers open Lens while modified clicks and changed action destinations stay native', async () => {
+  const { context, github, collapse, errors } = await openExtensionFixture();
+  try {
+    const image = github.locator('#tall');
+    const original = github.locator('#original');
+    const originalMarkup = await original.evaluate((node) => node.outerHTML);
+    const dialog = github.getByRole('dialog');
+    for (const activate of [
+      async () => image.click(),
+      async () => {
+        await original.focus();
+        await github.keyboard.press('Enter');
+      },
+      async () => {
+        await original.evaluate((node) => {
+          node.style.padding = '12px';
+          node.style.display = 'inline-block';
+        });
+        await original.click({ position: { x: 2, y: 2 } });
+      },
+    ]) {
+      await activate();
+      await expect(dialog).toHaveAccessibleName('Tall screenshot');
+      await expect(dialog.getByRole('link', { name: 'Open image in new tab' })).toHaveAttribute(
+        'href',
+        signedImage,
+      );
+      await github.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
+      await expect(original).toBeFocused();
+    }
+    await original.evaluate((node) => node.removeAttribute('style'));
+    for (const collapsed of [false, true]) {
+      if (collapsed) await collapse.click();
+      const opener = collapsed ? github.locator('[data-pr-lens-placeholder]') : image;
+      for (const options of [{ button: 'middle' as const }, { modifiers: ['Meta' as const] }]) {
+        const newPage = context.waitForEvent('page');
+        await opener.click(options);
+        const destination = await newPage;
+        await expect(destination).toHaveURL(signedImage);
+        await expect(dialog).toBeHidden();
+        await destination.close();
+      }
+    }
+    // Changes to existing text nodes also turn an image-only wrapper into an action link.
+    await original.evaluate((node) => node.append(document.createTextNode(' ')));
+    await original.evaluate((node) => {
+      node.lastChild!.textContent = 'Fix issue';
+    });
+    await expect(image).toBeVisible();
+    await expect(github.locator('[data-pr-lens-placeholder]')).toHaveCount(0);
+    await original.evaluate((node) => {
+      node.lastChild!.textContent = ' ';
+    });
+    await expect(github.locator('[data-pr-lens-placeholder]')).toHaveCount(1);
+    await original.evaluate((node) => node.lastChild!.remove());
+    // The same image becomes ineligible when its link changes into an action.
+    await original.evaluate((node) => node.setAttribute('href', '#reading'));
+    await expect(image).toBeVisible();
+    await expect(github.locator('[data-pr-lens-placeholder]')).toHaveCount(0);
+    await original.evaluate((node) => node.setAttribute('target', '_self'));
+    await image.click();
+    await expect(github).toHaveURL(/#reading$/);
+    await expect(dialog).toBeHidden();
+    await original.evaluate((node, url) => {
+      node.setAttribute('href', url);
+      node.setAttribute('target', '_blank');
+    }, signedImage);
+    await expect(github.locator('[data-pr-lens-placeholder]')).toHaveCount(1);
+    await github.locator('[data-pr-lens-placeholder]').click();
+    await expect(dialog).toHaveAccessibleName('Tall screenshot');
+    await github.keyboard.press('Escape');
+    await collapse.click();
+    await expect(image).toBeVisible();
+    expect(await original.evaluate((node) => node.outerHTML)).toBe(originalMarkup);
+    expect(errors).toEqual([]);
+  } finally {
+    await context.close();
+  }
+});
+
+test('wrapping collapsed images or changing ancestor roles restores them and updates the gallery live', async () => {
+  const { context, github, collapse, errors } = await openExtensionFixture();
+  try {
+    await collapse.click();
+    await expect(github.locator('[data-pr-lens-placeholder]')).toHaveCount(1);
+    await github.locator('#original').evaluate((original) => {
+      const picture = original.querySelector('picture')!;
+      const link = document.createElement('a');
+      link.id = 'dynamic-link';
+      link.href = '#reading';
+      original.before(link);
+      link.append(picture);
+      original.remove();
+    });
+    await expect(github.locator('#tall')).toBeVisible();
+    await expect(github.locator('[data-pr-lens-placeholder]')).toHaveCount(0);
+    await github.locator('#tall').click();
+    await expect(github).toHaveURL(/#reading$/);
+    await expect(github.getByRole('dialog')).toHaveCount(0);
+    await github.locator('#dynamic-link').evaluate((link) => link.replaceWith(...link.childNodes));
+    await expect(github.locator('[data-pr-lens-placeholder]')).toHaveCount(1);
+    // Role changes above .markdown-body also need to invalidate eligibility.
+    for (const role of ['link', 'button']) {
+      await github
+        .locator('#issue-1')
+        .evaluate((node, value) => node.setAttribute('role', value), role);
+      await expect(github.locator('#tall')).toBeVisible();
+      await expect(github.locator('[data-pr-lens-placeholder]')).toHaveCount(0);
+      await github.locator('#issue-1').evaluate((node) => node.removeAttribute('role'));
+      await expect(github.locator('[data-pr-lens-placeholder]')).toHaveCount(1);
+    }
+    await github.locator('[data-pr-lens-placeholder]').click();
+    await expect(github.getByRole('dialog')).toHaveAccessibleName('Tall screenshot');
+    expect(errors).toEqual([]);
+  } finally {
+    await context.close();
+  }
+});
 
 test('collapse preserves reading position, sources, gallery access, preferences, and exclusions', async () => {
   const { context, popup, github, collapse, errors } = await openExtensionFixture();
@@ -251,14 +473,20 @@ test('collapsed galleries track source changes, mixed links, and many rendered i
         body.append(entry);
       }
     });
-    await expect(github.locator('[data-pr-lens-placeholder]')).toHaveCount(1002);
+    await expect(github.locator('[data-pr-lens-placeholder]')).toHaveCount(1001);
     await expect(
-      github.getByRole('link', { name: 'Related discussion', exact: true }),
+      github.getByRole('link', { name: 'Related discussionMixed link screenshot', exact: true }),
+    ).toBeVisible();
+    await expect(
+      github.getByRole('img', { name: 'Mixed link screenshot', exact: true }),
     ).toBeVisible();
     await expect(github.locator('a a')).toHaveCount(0);
     await github.locator('#tall').evaluate((node) => {
       node.setAttribute('alt', 'Updated title');
       node.setAttribute('src', 'https://github.com/assets/updated.svg?signature=preserved');
+      node
+        .closest('a')!
+        .setAttribute('href', 'https://github.com/assets/updated.svg?signature=preserved');
     });
     const updated = github.getByRole('link', {
       name: 'View in PR Lens · Updated title',
